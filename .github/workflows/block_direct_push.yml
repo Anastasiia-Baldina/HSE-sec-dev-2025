@@ -1,0 +1,16 @@
+name: Block direct push to main
+
+on:
+  push:
+    branches: [ main ]
+jobs:
+  block-direct-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check if push is direct
+        run: |
+          if [ "${{ github.event.pull_request }}" = "" ]; then
+            echo "Direct push to main are not allowed!"
+            echo "Please use pull requests for changes to main branch."
+            exit 1
+          fi
