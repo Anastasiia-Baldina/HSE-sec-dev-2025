@@ -1,0 +1,56 @@
+# Build stage
+FROM python:3.11-alpine AS build
+
+WORKDIR /app
+
+RUN apk add --no-cache \
+    gcc \
+    musl-dev \
+    postgresql-dev \
+    python3-dev \
+    libffi-dev \
+    openssl-dev
+
+COPY requirements.txt ./
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+COPY . .
+
+# Runtime stage
+FROM python:3.11-alpine AS runtime
+
+WORKDIR /app
+
+RUN apk add --no-cache \
+    libpq \
+    curl
+
+# Non-root user
+RUN addgroup -S appuser && adduser -S appuser -G appuser
+
+# Copy installed packages from build stage
+COPY --from=build /root/.local/lib/python3.11/site-packages /home/appuser/.local/lib/python3.11/site-packages
+COPY --from=build /root/.local/bin /home/appuser/.local/bin
+COPY --from=build /app /app
+
+# Ownership and permissions
+RUN chown -R appuser:appuser /app /home/appuser \
+    && chmod -R 755 /home/appuser/.local/bin/ \
+    && find /home/appuser/.local/bin/ -type f -exec chmod +x {} \; \
+    && chmod -R g-w,o-rwx /home/appuser/.local
+
+# Directories
+RUN mkdir -p /tmp/app && chown appuser:appuser /tmp/app
+
+EXPOSE 8000
+
+USER appuser
+
+ENV PATH="/home/appuser/.local/bin:${PATH}" \
+    PYTHONUNBUFFERED=1 \
+    PYTHONPATH=/app
+
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=40s \
+    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5)" || exit 1
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--loop", "asyncio"]

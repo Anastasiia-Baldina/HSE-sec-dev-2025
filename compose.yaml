@@ -1,8 +1,75 @@
 services:
-  app:
+  app-dev:
     build: .
     ports:
       - "8000:8000"
     environment:
       - PYTHONUNBUFFERED=1
     profiles: ["dev"]
+
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+    profiles: ["prod"]
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DATABASE_URL=postgresql://app_user:${DB_PASSWORD}@db:5432/app_db
+    security_opt:
+      - no-new-privileges:true
+      - seccomp:./seccomp-profile.json
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - DAC_OVERRIDE
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=64m
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  db:
+    image: postgres:15-alpine
+    profiles: ["prod"]
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=app_db
+      - POSTGRES_USER=app_user
+      - POSTGRES_PASSWORD=${DB_PASSWORD}
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db-scripts:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app_user -d app_db || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  postgres_data:
