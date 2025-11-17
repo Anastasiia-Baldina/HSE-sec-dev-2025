@@ -1,5 +1,16 @@
 # SecDev Course Template
 
+### Сборка для отладки
+```bash
+docker compose --profile dev down
+docker compose --profile dev up --build
+```
+### Финальная сборка
+```bash
+docker compose --profile prod down
+docker compose --profile prod up --build
+```
+
 Стартовый шаблон для студенческого репозитория (HSE SecDev 2025).
 
 ## Быстрый старт
