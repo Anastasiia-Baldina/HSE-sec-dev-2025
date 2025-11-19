@@ -1,6 +1,7 @@
 import concurrent.futures
 import threading
 import time
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -18,6 +19,10 @@ def increment():
         return counter
 
 
+def get_future_date(days=1):
+    return (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+
+
 def test_should_write_with_300ms_latency():
     time.sleep(1.2)
 
@@ -25,14 +30,16 @@ def test_should_write_with_300ms_latency():
         start_time = time.time()
         topic = {
             "title": f"test_should_write_with_300ms_latency_{increment()}",
-            "due_at": "2025-10-01T12:00:00",
+            "due_at": get_future_date(increment()),
             "status": "open",
         }
         r = client.post("/topics", json=topic)
 
         end_time = time.time()
 
-        assert r.status_code == 200
+        assert (
+            r.status_code == 200
+        ), f"Expected 200, got {r.status_code}. Response: {r.text}"
 
         return (end_time - start_time) * 1000
 

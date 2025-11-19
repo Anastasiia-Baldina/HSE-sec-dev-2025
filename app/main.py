@@ -7,6 +7,7 @@ from slowapi.util import get_remote_address
 
 from app.csv_validation import check_and_save
 from app.entity import Topic, TopicStatus
+from app.entity_validation import validate_title, validate_topic
 from app.error import ApiError, NotFoundError, ValidationError, WriteConflictError
 from app.error_handling import (
     api_error_handler,
@@ -14,6 +15,9 @@ from app.error_handling import (
     http_exception_handler,
     validation_exception_handler,
 )
+from app.logging_config import setup_safe_logging
+
+setup_safe_logging()
 
 app = FastAPI(title="SecDev Course App", version="0.1.0")
 
@@ -22,12 +26,10 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-
 app.add_exception_handler(ApiError, api_error_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
-
 
 crud_limit = limiter.shared_limit("15/second", scope="crud-limit")
 read_limit = limiter.shared_limit("25/second", scope="read-limit")
@@ -77,6 +79,7 @@ def update_topic(request: Request, topic: Topic):
 @app.delete("/topics/{title}")
 @crud_limit
 def delete_topic(request: Request, title: str):
+    validate_title(title)
     check_exists(title)
     del _DB[title]
     return {"message": "Topic deleted successfully"}
@@ -103,16 +106,3 @@ async def import_topics(request: Request, file: UploadFile):
 def check_exists(title: str):
     if title not in _DB:
         raise NotFoundError()
-
-
-def validate_title(title: str):
-    if not title or len(title) > 100:
-        raise ValidationError(message="title must be 1..100 chars")
-
-
-def validate_topic(topic: Topic):
-    validate_title(topic.title)
-    if not topic.status:
-        raise ValidationError(message="status mustn't be null")
-    if not topic.due_at:
-        raise ValidationError(message="due_at mustn't be null")
