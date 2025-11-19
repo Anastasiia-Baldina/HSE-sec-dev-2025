@@ -4,6 +4,9 @@ class ApiError(Exception):
         self.message = message
         self.status = status
 
+    def __str__(self):
+        return self.message
+
 
 class NotFoundError(ApiError):
     def __init__(self):

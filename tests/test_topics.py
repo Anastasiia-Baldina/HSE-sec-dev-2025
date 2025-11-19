@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 from fastapi.testclient import TestClient
 
 from app.main import app
@@ -5,10 +7,14 @@ from app.main import app
 client = TestClient(app)
 
 
+def get_future_date(days=30):
+    return (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%dT%H:%M:%S")
+
+
 def test_should_create_topic():
     topic = {
         "title": "test_should_create_topic",
-        "due_at": "2025-10-01T12:00:00",
+        "due_at": get_future_date(1),  # Завтра
         "status": "open",
     }
     r = client.post("/topics", json=topic)
@@ -18,7 +24,7 @@ def test_should_create_topic():
 def test_should_get_by_title():
     topic = {
         "title": "test_should_get_by_title",
-        "due_at": "2025-10-01T12:00:00",
+        "due_at": get_future_date(2),
         "status": "open",
     }
     client.post("/topics", json=topic)
@@ -43,12 +49,12 @@ def test_should_return_404_on_get_by_title_when_does_not_exists():
 def test_should_not_create_topic_when_topic_already_exists():
     topic = {
         "title": "test_should_not_create_topic_when_topic_already_exists",
-        "due_at": "2025-10-01T12:00:00",
+        "due_at": get_future_date(3),
         "status": "open",
     }
     topic2 = {
         "title": "test_should_not_create_topic_when_topic_already_exists",
-        "due_at": "2025-11-01T12:00:00",
+        "due_at": get_future_date(10),
         "status": "in_progress",
     }
 
@@ -65,12 +71,12 @@ def test_should_not_create_topic_when_topic_already_exists():
 def test_should_update_topic():
     topic = {
         "title": "test_should_update_topic",
-        "due_at": "2025-10-01T12:00:00",
+        "due_at": get_future_date(5),
         "status": "open",
     }
     expected_topic = {
         "title": "test_should_update_topic",
-        "due_at": "2025-11-01T12:00:00",
+        "due_at": get_future_date(15),
         "status": "in_progress",
     }
 
@@ -86,7 +92,7 @@ def test_should_update_topic():
 def test_should_not_update_when_topic_does_not_exists():
     topic = {
         "title": "test_should_not_update_when_topic_does_not_exists",
-        "due_at": "2025-10-01T12:00:00",
+        "due_at": get_future_date(7),
         "status": "open",
     }
     r = client.put("/topics", json=topic)
@@ -113,7 +119,7 @@ def test_should_return_not_found_on_delete_when_topic_does_not_exists():
 def test_should_delete_topic():
     topic = {
         "title": "test_should_delete_topic",
-        "due_at": "2025-10-01T12:00:00",
+        "due_at": get_future_date(8),
         "status": "open",
     }
     client.post("/topics", json=topic)
@@ -126,7 +132,7 @@ def test_should_delete_topic():
 def test_should_find_by_status():
     topic = {
         "title": "test_should_find_by_status",
-        "due_at": "2025-10-01T12:00:00",
+        "due_at": get_future_date(12),
         "status": "closed",
     }
     client.post("/topics", json=topic)

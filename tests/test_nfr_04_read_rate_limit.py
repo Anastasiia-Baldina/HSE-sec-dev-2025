@@ -1,4 +1,5 @@
 import time
+from datetime import datetime, timedelta
 
 from fastapi.testclient import TestClient
 
@@ -7,14 +8,31 @@ from app.main import app
 client = TestClient(app)
 
 
+def get_valid_future_date(days=1):
+    max_days = min(days, 365)
+    return (datetime.now() + timedelta(days=max_days)).strftime("%Y-%m-%dT%H:%M:%S")
+
+
 def test_should_get_topics_with_rate_limit_on_25_rps():
     time.sleep(1.2)
     topic = {
         "title": "test_should_get_topics_with_rate_limit_on_25_rps",
-        "due_at": "2025-10-01T12:00:00",
+        "due_at": get_valid_future_date(1),
         "status": "open",
     }
-    r = client.post("/topics", json=topic)
+
+    create_response = client.post("/topics", json=topic)
+    assert (
+        create_response.status_code == 200
+    ), f"Failed to create topic: {create_response.text}"
+
+    initial_get = client.get(
+        "/topics/title/test_should_get_topics_with_rate_limit_on_25_rps"
+    )
+    assert (
+        initial_get.status_code == 200
+    ), f"Topic should be available: {initial_get.text}"
+
     responses = []
     for i in range(26):
         r = client.get("/topics/title/test_should_get_topics_with_rate_limit_on_25_rps")
@@ -32,4 +50,4 @@ def test_should_get_topics_with_rate_limit_on_25_rps():
     r_ok = client.get("/topics/title/test_should_get_topics_with_rate_limit_on_25_rps")
     assert (
         r_ok.status_code == 200
-    ), f"Expected 200 after time window, but was {r_ok.status_code}"
+    ), f"Expected 200 after time window, but was {r_ok.status_code}. Response: {r_ok.text}"

@@ -5,7 +5,17 @@
 ## Быстрый старт
 ```bash
 python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\Activate.ps1
+source .venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+pre-commit install
+uvicorn app.main:app --reload
+```
+Windows
+```bash
+deactivate
+Remove-Item -Recurse -Force .venv
+py -3.13 -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt -r requirements-dev.txt
 pre-commit install
 uvicorn app.main:app --reload
