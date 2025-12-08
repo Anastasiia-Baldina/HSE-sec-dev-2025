@@ -1,4 +1,4 @@
-name: CI/CD Minimal Pipeline
+name: "P08 CI/CD Minimal Pipeline"
 
 on:
   pull_request:

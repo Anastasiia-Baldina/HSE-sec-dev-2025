@@ -1,4 +1,4 @@
-name: "Security - SBOM & SCA"
+name: "P09 Security - SBOM & SCA"
 
 on:
   workflow_dispatch:
@@ -59,7 +59,6 @@ jobs:
 
           echo "SBOM generated. Size: $(wc -l < EVIDENCE/P09/sbom.json) lines"
 
-          # Validate SBOM
           if [ -s "EVIDENCE/P09/sbom.json" ]; then
             echo "SBOM validation: OK"
             jq '.components | length' EVIDENCE/P09/sbom.json | xargs echo "Number of components:"
@@ -72,13 +71,11 @@ jobs:
         run: |
           echo "Running SCA scan using Grype..."
 
-          # Check if SBOM exists
           if [ ! -f "EVIDENCE/P09/sbom.json" ]; then
             echo "ERROR: SBOM file not found"
             exit 1
           fi
 
-          # Run Grype scan
           docker run --rm \
             -v $PWD:/work \
             -w /work \
@@ -89,7 +86,6 @@ jobs:
             -o json \
             > EVIDENCE/P09/sca_report.json 2>/dev/null || true
 
-          # Check if report was generated
           if [ -s "EVIDENCE/P09/sca_report.json" ]; then
             echo "SCA scan completed. Report generated."
           else
@@ -101,18 +97,15 @@ jobs:
         run: |
           echo "Generating SCA summary..."
 
-          # Create markdown summary
           echo "# SCA Vulnerability Summary" > EVIDENCE/P09/sca_summary.md
           echo "Generated: $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> EVIDENCE/P09/sca_summary.md
           echo "Commit: ${{ github.sha }}" >> EVIDENCE/P09/sca_summary.md
           echo "" >> EVIDENCE/P09/sca_summary.md
 
-          # Check if we have vulnerabilities
           if jq -e '.matches | length > 0' EVIDENCE/P09/sca_report.json > /dev/null 2>&1; then
             echo "## Vulnerability Statistics" >> EVIDENCE/P09/sca_summary.md
             echo "" >> EVIDENCE/P09/sca_summary.md
 
-            # Count by severity
             echo "| Severity | Count |" >> EVIDENCE/P09/sca_summary.md
             echo "|----------|-------|" >> EVIDENCE/P09/sca_summary.md
             for severity in Critical High Medium Low Negligible Unknown; do
@@ -124,25 +117,23 @@ jobs:
             echo "## Top Vulnerabilities" >> EVIDENCE/P09/sca_summary.md
             echo "" >> EVIDENCE/P09/sca_summary.md
 
-            # List top 10 vulnerabilities
             echo "| CVE ID | Package | Version | Severity | Fix State |" >> EVIDENCE/P09/sca_summary.md
             echo "|--------|---------|---------|----------|-----------|" >> EVIDENCE/P09/sca_summary.md
 
             jq -r '.matches[] |
               select(.vulnerability.severity == "Critical" or .vulnerability.severity == "High") |
-              "| \(.vulnerability.id) | \(.artifact.name) | \(.artifact.version) | \(.vulnerability.severity) | \(if .vulnerability.fix.state == "fixed" then "✅ Fixed" else "⚠️ Not Fixed" end) |"' \
+              "| \(.vulnerability.id) | \(.artifact.name) | \(.artifact.version) | \(.vulnerability.severity) | \(if .vulnerability.fix.state == "fixed" then "Fixed" else "Not Fixed" end) |"' \
               EVIDENCE/P09/sca_report.json | head -20 >> EVIDENCE/P09/sca_summary.md 2>/dev/null || true
 
             echo "" >> EVIDENCE/P09/sca_summary.md
-            echo "*Showing only Critical and High severity vulnerabilities*" >> EVIDENCE/P09/sca_summary.md
+            echo "Showing only Critical and High severity vulnerabilities" >> EVIDENCE/P09/sca_summary.md
 
-            # Add note about all vulnerabilities
             total=$(jq '.matches | length' EVIDENCE/P09/sca_report.json)
             echo "" >> EVIDENCE/P09/sca_summary.md
-            echo "**Total vulnerabilities found:** $total" >> EVIDENCE/P09/sca_summary.md
+            echo "Total vulnerabilities found: $total" >> EVIDENCE/P09/sca_summary.md
 
           else
-            echo "## No Vulnerabilities Found 🎉" >> EVIDENCE/P09/sca_summary.md
+            echo "## No Vulnerabilities Found" >> EVIDENCE/P09/sca_summary.md
             echo "" >> EVIDENCE/P09/sca_summary.md
             echo "No vulnerabilities detected in the scanned dependencies." >> EVIDENCE/P09/sca_summary.md
           fi
@@ -150,14 +141,14 @@ jobs:
           echo "" >> EVIDENCE/P09/sca_summary.md
           echo "---" >> EVIDENCE/P09/sca_summary.md
           echo "## Files in This Report" >> EVIDENCE/P09/sca_summary.md
-          echo "- **sbom.json**: Software Bill of Materials (CycloneDX format)" >> EVIDENCE/P09/sca_summary.md
-          echo "- **sca_report.json**: Full SCA scan results (JSON)" >> EVIDENCE/P09/sca_summary.md
-          echo "- **sca_summary.md**: This summary file" >> EVIDENCE/P09/sca_summary.md
+          echo "- sbom.json: Software Bill of Materials (CycloneDX format)" >> EVIDENCE/P09/sca_summary.md
+          echo "- sca_report.json: Full SCA scan results (JSON)" >> EVIDENCE/P09/sca_summary.md
+          echo "- sca_summary.md: This summary file" >> EVIDENCE/P09/sca_summary.md
 
           echo "" >> EVIDENCE/P09/sca_summary.md
           echo "## How to View Detailed Results" >> EVIDENCE/P09/sca_summary.md
           echo '1. Download the artifacts from GitHub Actions' >> EVIDENCE/P09/sca_summary.md
-          echo '2. Use `jq` to query the JSON files:' >> EVIDENCE/P09/sca_summary.md
+          echo '2. Use jq to query the JSON files:' >> EVIDENCE/P09/sca_summary.md
           echo '   ```bash' >> EVIDENCE/P09/sca_summary.md
           echo '   # List all vulnerabilities' >> EVIDENCE/P09/sca_summary.md
           echo '   jq ".matches[] | .vulnerability.id, .artifact.name, .artifact.version, .vulnerability.severity" sca_report.json' >> EVIDENCE/P09/sca_summary.md
@@ -165,6 +156,7 @@ jobs:
 
       - name: Apply waiver policy to summary
         run: |
+          echo "" >> EVIDENCE/P09/sca_summary.md
           echo "" >> EVIDENCE/P09/sca_summary.md
           echo "## Waiver Policy Status" >> EVIDENCE/P09/sca_summary.md
           echo "" >> EVIDENCE/P09/sca_summary.md
@@ -180,7 +172,6 @@ jobs:
               echo "| CVE ID | Package | Severity | Expires | Status |" >> EVIDENCE/P09/sca_summary.md
               echo "|--------|---------|----------|---------|--------|" >> EVIDENCE/P09/sca_summary.md
 
-              # Extract waiver information (simple grep approach)
               awk -F': ' '
                 /^- id:/ {id=$2}
                 /package:/ {pkg=$2}
@@ -197,9 +188,9 @@ jobs:
 
           echo "" >> EVIDENCE/P09/sca_summary.md
           echo "### Waiver Management" >> EVIDENCE/P09/sca_summary.md
-          echo "- **Policy file**: \`policy/waivers.yml\`" >> EVIDENCE/P09/sca_summary.md
-          echo "- **Review required**: Before expiration dates" >> EVIDENCE/P09/sca_summary.md
-          echo "- **Process**: Documented in policy file" >> EVIDENCE/P09/sca_summary.md
+          echo "- Policy file: policy/waivers.yml" >> EVIDENCE/P09/sca_summary.md
+          echo "- Review required: Before expiration dates" >> EVIDENCE/P09/sca_summary.md
+          echo "- Process: Documented in policy file" >> EVIDENCE/P09/sca_summary.md
 
       - name: Generate workflow summary
         run: |
@@ -207,17 +198,15 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [ -f "EVIDENCE/P09/sca_summary.md" ]; then
-            # Extract key info from summary
             echo "## Scan Overview" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
 
             if grep -q "No Vulnerabilities Found" EVIDENCE/P09/sca_summary.md; then
-              echo "✅ **No vulnerabilities detected**" >> $GITHUB_STEP_SUMMARY
+              echo "No vulnerabilities detected" >> $GITHUB_STEP_SUMMARY
             else
               echo "## Vulnerability Summary" >> $GITHUB_STEP_SUMMARY
               echo "" >> $GITHUB_STEP_SUMMARY
 
-              # Extract severity counts from the table
               if grep -q "Vulnerability Statistics" EVIDENCE/P09/sca_summary.md; then
                 awk '/Vulnerability Statistics/,/Top Vulnerabilities/' EVIDENCE/P09/sca_summary.md | grep "|" | tail -6 >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
               fi
@@ -225,7 +214,7 @@ jobs:
               total=$(grep "Total vulnerabilities found" EVIDENCE/P09/sca_summary.md | grep -o '[0-9]*' || echo "0")
               if [ "$total" != "0" ]; then
                 echo "" >> $GITHUB_STEP_SUMMARY
-                echo "⚠️ **Found $total vulnerabilities**" >> $GITHUB_STEP_SUMMARY
+                echo "Found $total vulnerabilities" >> $GITHUB_STEP_SUMMARY
                 echo "Check the full report for details." >> $GITHUB_STEP_SUMMARY
               fi
             fi
@@ -233,17 +222,16 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "## Artifacts Generated" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "- **SBOM**: CycloneDX JSON format" >> $GITHUB_STEP_SUMMARY
-            echo "- **SCA Report**: Full vulnerability scan" >> $GITHUB_STEP_SUMMARY
-            echo "- **Summary**: Markdown summary with statistics" >> $GITHUB_STEP_SUMMARY
+            echo "- SBOM: CycloneDX JSON format" >> $GITHUB_STEP_SUMMARY
+            echo "- SCA Report: Full vulnerability scan" >> $GITHUB_STEP_SUMMARY
+            echo "- Summary: Markdown summary with statistics" >> $GITHUB_STEP_SUMMARY
 
-            # Check for waivers
             if [ -f "policy/waivers.yml" ]; then
               WAIVER_COUNT=$(grep -c "^- id:" policy/waivers.yml || echo "0")
               if [ "$WAIVER_COUNT" -gt "0" ]; then
                 echo "" >> $GITHUB_STEP_SUMMARY
                 echo "## Waivers Active" >> $GITHUB_STEP_SUMMARY
-                echo "**$WAIVER_COUNT waivers** documented in policy file" >> $GITHUB_STEP_SUMMARY
+                echo "$WAIVER_COUNT waivers documented in policy file" >> $GITHUB_STEP_SUMMARY
               fi
             fi
 
@@ -253,18 +241,18 @@ jobs:
             echo "1. Review vulnerabilities in the SCA report" >> $GITHUB_STEP_SUMMARY
             echo "2. For critical/high vulnerabilities:" >> $GITHUB_STEP_SUMMARY
             echo "   - Update dependencies if fixes available" >> $GITHUB_STEP_SUMMARY
-            echo "   - Create waivers in `policy/waivers.yml` if needed" >> $GITHUB_STEP_SUMMARY
+            echo "   - Create waivers in policy/waivers.yml if needed" >> $GITHUB_STEP_SUMMARY
             echo "   - Track fixes in issues/PRs" >> $GITHUB_STEP_SUMMARY
 
           else
-            echo "## ⚠️ Scan Incomplete" >> $GITHUB_STEP_SUMMARY
+            echo "## Scan Incomplete" >> $GITHUB_STEP_SUMMARY
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Failed to generate SCA summary. Check workflow logs for details." >> $GITHUB_STEP_SUMMARY
           fi
 
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "---" >> $GITHUB_STEP_SUMMARY
-          echo "*Generated by Security - SBOM & SCA workflow*" >> $GITHUB_STEP_SUMMARY
+          echo "Generated by Security - SBOM & SCA workflow" >> $GITHUB_STEP_SUMMARY
 
       - name: Upload evidence artifacts
         uses: actions/upload-artifact@v4
