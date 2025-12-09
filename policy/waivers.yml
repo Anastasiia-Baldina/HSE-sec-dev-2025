@@ -1,0 +1,55 @@
+# policy/waivers.yml — Vulnerability Waivers for SBOM & SCA
+# This file contains approved exceptions for vulnerabilities that cannot be immediately fixed.
+# See project/69_sbom-vuln-mgmt.md for the vulnerability management policy.
+
+waivers:
+  # Example waiver structure (commented out)
+  # - id: "CVE-2024-XXXXX"
+  #   package: "example-package"
+  #   version: "1.2.3"
+  #   severity: "High"
+  #   reason: |
+  #     This is a transitive dependency that:
+  #     1. Is not directly used in production code paths
+  #     2. Has no available fix in the current version
+  #     3. Will be updated when the parent package releases a fix
+  #   mitigation: "Network segmentation and monitoring"
+  #   issue: "https://github.com/org/repo/issues/123"
+  #   approved_by: "security-team@example.com"
+  #   expires_at: "2025-06-30"
+  #   reviewed_at: "2024-12-01"
+
+  # Actual waivers will be added here based on SCA scan results
+  # Template for adding new waivers:
+  # - id: "CVE-YYYY-XXXXX"
+  #   package: "package-name"
+  #   version: "current-version"
+  #   severity: "High/Medium/Low"
+  #   reason: "Detailed justification for the waiver"
+  #   mitigation: "Compensating controls if any"
+  #   issue: "Link to tracking issue"
+  #   approved_by: "approver-email"
+  #   expires_at: "YYYY-MM-DD"
+  #   reviewed_at: "YYYY-MM-DD"
+
+# Waiver approval workflow:
+# 1. Run SBOM/SCA scan and identify vulnerabilities
+# 2. Attempt to fix (update dependencies, apply patches)
+# 3. If fix is not possible/feasible, create waiver with:
+#    - Technical justification
+#    - Risk assessment
+#    - Mitigation measures
+#    - Expiration date (max 6 months)
+#    - Approval from security team/architect
+# 4. Document in this file
+# 5. Review before expiration
+
+# Severity classification (from project/69_sbom-vuln-mgmt.md):
+# - Critical: Must be fixed immediately (no waiver allowed)
+# - High: Fix within 30 days, waiver requires CISO approval
+# - Medium: Fix within 90 days, waiver requires team lead approval
+# - Low: Fix as part of regular maintenance
+
+# Current project status:
+# No waivers required at this time. All vulnerabilities should be addressed
+# through dependency updates when available.
