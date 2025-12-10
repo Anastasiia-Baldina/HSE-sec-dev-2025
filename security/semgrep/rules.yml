@@ -1,5 +1,4 @@
 rules:
-  # Custom rules for FastAPI project security
   - id: "fastapi-no-hardcoded-secrets"
     pattern: |
       $SECRET = "..."
@@ -20,9 +19,10 @@ rules:
         - "security/semgrep/rules.yml"
 
   - id: "fastapi-raw-sql-injection"
-    patterns:
-      - pattern: "execute($QUERY, ...)"
-      - pattern-not: "execute($QUERY, $PARAMS, ...)"
+    pattern: |
+      execute($QUERY, ...)
+    pattern-not: |
+      execute($QUERY, $PARAMS, ...)
     message: "Potential SQL injection. Use parameterized queries or ORM."
     languages: [python]
     severity: WARNING
@@ -71,10 +71,10 @@ rules:
       owasp: "A8:2017"
 
   - id: "fastapi-input-validation-simple"
-    pattern: |
-      async def $FUNC($PARAM: str = ...):
-        ...
     patterns:
+      - pattern: |
+          async def $FUNC($PARAM: str = ...):
+            ...
       - pattern-not: |
           async def $FUNC($PARAM: str = Field(..., $CONSTRAINTS)):
             ...
@@ -135,7 +135,6 @@ rules:
       confidence: HIGH
       cwe: ["CWE-396", "CWE-397"]
 
-  # Additional security rules
   - id: "fastapi-missing-https-redirect"
     pattern: |
       @app.$METHOD("$PATH")
