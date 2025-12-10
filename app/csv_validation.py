@@ -1,6 +1,8 @@
 import uuid
 from pathlib import Path
 
+from app.constants import ALLOWED_EXTENSIONS, DEFAULT_EXTENSION
+
 MAX_BYTES = 5_000_000
 ALLOWED_MIME_TYPES = {"text/csv", "application/csv", "text/plain"}
 CSV_SIGNATURES = [
@@ -36,9 +38,9 @@ def secure_save(base_dir: str, data: bytes, filename_hint: str = "") -> str:
 
     root = Path(base_dir).resolve(strict=True)
 
-    ext = Path(filename_hint).suffix.lower() if filename_hint else ".csv"
-    if ext not in {".csv", ".txt"}:
-        ext = ".csv"
+    ext = Path(filename_hint).suffix.lower() if filename_hint else DEFAULT_EXTENSION
+    if ext not in ALLOWED_EXTENSIONS:
+        ext = DEFAULT_EXTENSION
 
     name = f"{uuid.uuid4()}{ext}"
     path = (root / name).resolve()

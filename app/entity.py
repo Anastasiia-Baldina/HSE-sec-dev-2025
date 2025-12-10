@@ -3,6 +3,8 @@ from enum import Enum
 
 from pydantic import BaseModel
 
+from app.constants import STATUS_CLOSED, STATUS_IN_PROGRESS, STATUS_OPEN
+
 
 class Topic(BaseModel):
     title: str
@@ -11,6 +13,6 @@ class Topic(BaseModel):
 
 
 class TopicStatus(str, Enum):
-    open = "open"
-    in_progress = "in_progress"
-    closed = "closed"
+    open = STATUS_OPEN
+    in_progress = STATUS_IN_PROGRESS
+    closed = STATUS_CLOSED
