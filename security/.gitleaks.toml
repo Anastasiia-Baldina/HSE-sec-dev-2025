@@ -1,0 +1,105 @@
+title = "HSE SecDev Gitleaks Configuration"
+version = "8.18.2"
+
+[[allowlist]]
+description = "Test files and fixtures"
+paths = [
+  ".*\\.test\\.py$",
+  ".*test_.*\\.py$",
+  ".*/tests/.*",
+  ".*/fixtures/.*",
+  ".*/mocks/.*"
+]
+
+[[allowlist]]
+description = "Example and documentation files"
+paths = [
+  ".*\\.md$",
+  ".*\\.txt$",
+  ".*\\.rst$",
+  ".*/examples/.*",
+  ".*/docs/.*",
+  "README.*"
+]
+
+[[allowlist]]
+description = "Configuration and CI files"
+paths = [
+  ".*\\.yml$",
+  ".*\\.yaml$",
+  ".*\\.toml$",
+  ".*\\.ini$",
+  ".*\\.cfg$",
+  ".*/github/workflows/.*",
+  ".*Dockerfile.*"
+]
+
+[[allowlist]]
+description = "Dependency files"
+paths = [
+  "requirements.*\\.txt$",
+  "pyproject\\.toml$",
+  "poetry\\.lock$",
+  "Pipfile$",
+  "Pipfile\\.lock$"
+]
+
+[[allowlist]]
+description = "Evidence and report directories"
+paths = [
+  "EVIDENCE/.*",
+  "reports/.*",
+  "coverage/.*"
+]
+
+[[allowlist]]
+regexes = [
+  "example\\.com",
+  "test@example\\.com",
+  "password.*test",
+  "test_.*key",
+  "mock_.*secret",
+  "placeholder",
+  "changeme",
+  "TODO.*secret",
+  "#.*fake.*key",
+  "localhost",
+  "127\\.0\\.0\\.1",
+  "0\\.0\\.0\\.0",
+  "postgresql://.*@localhost"
+]
+
+[[allowlist]]
+description = "Git SHAs and commit hashes"
+regex = '''[0-9a-f]{7,40}'''
+
+[[allowlist]]
+description = "UUIDs"
+regex = '''[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'''
+
+[[rules]]
+id = "hse-custom-allow-jwt-placeholders"
+description = "Allow JWT placeholders in test code"
+regex = '''(eyJ[A-Za-z0-9_-]*\.eyJ[A-Za-z0-9_-]*\.[A-Za-z0-9_-]*)'''
+tags = ["jwt", "token"]
+entropy = 3.5
+secretGroup = 1
+
+[[rules]]
+id = "hse-ignore-short-api-keys"
+description = "Ignore very short strings that look like keys"
+regex = '''[A-Za-z0-9]{8,12}'''
+tags = ["key", "api-key"]
+entropy = 2.0
+secretGroup = 1
+
+[general]
+redact = false
+verbose = false
+log-level = "info"
+max-target-megabytes = 50
+exit-code = 1
+
+[extend]
+useDefault = true
+path = ""
