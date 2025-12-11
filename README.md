@@ -1,6 +1,10 @@
-# SecDev Course Template
+[![CI Status](https://github.com/Anastasiia-Baldina/HSE-sec-dev-2025/actions/workflows/ci.yml/badge.svg)](https://github.com/Anastasiia-Baldina/HSE-sec-dev-2025/actions)
+[![Docker Image](https://img.shields.io/badge/docker-GHCR-blue)](https://github.com/Anastasiia-Baldina/HSE-sec-dev-2025/pkgs/container/ваш-repo)
+[![Python Versions](https://img.shields.io/badge/python-3.11%20|%203.12%20|%203.13-blue)](.github/workflows/ci.yml)
+[![Code Style: Black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+[![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff)
 
-Стартовый шаблон для студенческого репозитория (HSE SecDev 2025).
+# SecDev Course Template
 
 ## Быстрый старт
 ```bash

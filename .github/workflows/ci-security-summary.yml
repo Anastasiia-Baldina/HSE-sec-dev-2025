@@ -1,0 +1,108 @@
+name: "Security Summary"
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: security-summary-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  generate-summary:
+    name: "Generate Security Summary"
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+
+    steps:
+      - name: Generate summary
+        run: |
+          echo "# Security & CI/CD Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Generated:** $(date -u +'%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "**Commit:** [${{ github.sha }}](${{ github.server_url }}/${{ github.repository }}/commit/${{ github.sha }})" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "## Test Coverage Report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Python Versions:** 3.11, 3.12, 3.13" >> $GITHUB_STEP_SUMMARY
+          echo "**Test Framework:** Pytest" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage Tool:** pytest-cov" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Coverage Reports:**" >> $GITHUB_STEP_SUMMARY
+          echo "- XML coverage report (coverage.xml)" >> $GITHUB_STEP_SUMMARY
+          echo "- HTML coverage report (coverage-html/)" >> $GITHUB_STEP_SUMMARY
+          echo "- Line coverage percentage" >> $GITHUB_STEP_SUMMARY
+          echo "- Branch coverage percentage" >> $GITHUB_STEP_SUMMARY
+          echo "- Missing lines report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "## Security Scans" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**SBOM & SCA (P09)**" >> $GITHUB_STEP_SUMMARY
+          echo "- SBOM generation with Syft" >> $GITHUB_STEP_SUMMARY
+          echo "- Vulnerability scanning with Grype" >> $GITHUB_STEP_SUMMARY
+          echo "- Waiver policy integration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "**SAST & Secrets (P10)**" >> $GITHUB_STEP_SUMMARY
+          echo "- Static analysis with Semgrep" >> $GITHUB_STEP_SUMMARY
+          echo "- Secrets detection with Gitleaks" >> $GITHUB_STEP_SUMMARY
+          echo "- GitHub Code Scanning integration" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "## Available Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Test Reports" >> $GITHUB_STEP_SUMMARY
+          echo "- **linting-reports**: Lint outputs (pre-commit, ruff, black, isort)" >> $GITHUB_STEP_SUMMARY
+          echo "- **test-reports-3.11**: Python 3.11 tests with coverage" >> $GITHUB_STEP_SUMMARY
+          echo "- **test-reports-3.12**: Python 3.12 tests with coverage" >> $GITHUB_STEP_SUMMARY
+          echo "- **test-reports-3.13**: Python 3.13 tests with coverage" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Security Evidence" >> $GITHUB_STEP_SUMMARY
+          echo "- **sbom-sca-evidence-p09**: SBOM and SCA reports" >> $GITHUB_STEP_SUMMARY
+          echo "- **sast-secrets-evidence-p10**: SAST and secrets reports" >> $GITHUB_STEP_SUMMARY
+          echo "- **security-summary**: This summary file" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          echo "### Files in Artifacts" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**test-reports-* artifacts contain:**" >> $GITHUB_STEP_SUMMARY
+          echo "- junit.xml - Test results in JUnit format" >> $GITHUB_STEP_SUMMARY
+          echo "- coverage.xml - Coverage data in XML format" >> $GITHUB_STEP_SUMMARY
+          echo "- pytest.txt - Test execution log" >> $GITHUB_STEP_SUMMARY
+          echo "- test-run.txt - Test run information" >> $GITHUB_STEP_SUMMARY
+          echo "- coverage-html/ - HTML coverage report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**sbom-sca-evidence-p09 contains:**" >> $GITHUB_STEP_SUMMARY
+          echo "- sbom.json - Software Bill of Materials" >> $GITHUB_STEP_SUMMARY
+          echo "- sca_report.json - Vulnerability scan results" >> $GITHUB_STEP_SUMMARY
+          echo "- sca_summary.md - Summary report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**sast-secrets-evidence-p10 contains:**" >> $GITHUB_STEP_SUMMARY
+          echo "- semgrep.sarif - SAST scan results" >> $GITHUB_STEP_SUMMARY
+          echo "- gitleaks.json - Secrets scan results" >> $GITHUB_STEP_SUMMARY
+          echo "- sast_summary.md - Summary report" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "---" >> $GITHUB_STEP_SUMMARY
+          echo "Download artifacts from GitHub Actions interface" >> $GITHUB_STEP_SUMMARY
+
+      - name: Save summary to file
+        run: |
+          mkdir -p EVIDENCE/SUMMARY
+          cat $GITHUB_STEP_SUMMARY > EVIDENCE/SUMMARY/security_summary.md 2>/dev/null || true
+
+      - name: Upload summary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-summary
+          path: EVIDENCE/SUMMARY/
+          retention-days: 90
+          if-no-files-found: error

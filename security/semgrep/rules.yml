@@ -1,0 +1,177 @@
+rules:
+  - id: "fastapi-no-hardcoded-secrets"
+    patterns:
+      - pattern: |
+          $SECRET = "..."
+      - metavariable-regex:
+          metavariable: "$SECRET"
+          regex: "(?i)(api[_-]?key|secret|token|password|credential|private[_-]?key|jwt|auth|bearer|access[_-]?token|refresh[_-]?token|client[_-]?(id|secret))"
+    message: "Hardcoded secret detected. Use environment variables or secret management."
+    languages: [python]
+    severity: ERROR
+    metadata:
+      category: "security"
+      confidence: HIGH
+      cwe: ["CWE-798"]
+      owasp: "A2:2017"
+    paths:
+      include:
+        - "*.py"
+      exclude:
+        - "*/test_*.py"
+        - "*/tests/*"
+        - "security/semgrep/rules.yml"
+
+  - id: "fastapi-raw-sql-injection"
+    pattern: |
+      execute($QUERY, ...)
+    pattern-not: |
+      execute($QUERY, $PARAMS, ...)
+    message: "Potential SQL injection. Use parameterized queries or ORM."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: "security"
+      confidence: MEDIUM
+      cwe: ["CWE-89"]
+      owasp: "A1:2017"
+
+  - id: "fastapi-no-debug-in-production"
+    pattern: |
+      debug=True
+    message: "Debug mode should not be enabled in production."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: "security"
+      confidence: HIGH
+      cwe: ["CWE-489"]
+      owasp: "A5:2017"
+
+  - id: "fastapi-cors-wildcard"
+    pattern: |
+      allow_origins=["*"]
+    message: "CORS wildcard allows all origins. Restrict to specific domains."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: "security"
+      confidence: HIGH
+      cwe: ["CWE-942"]
+      owasp: "A7:2017"
+
+  - id: "fastapi-missing-rate-limit"
+    patterns:
+      - pattern: |
+          @app.$METHOD("$PATH")
+          async def $FUNC(...):
+            ...
+      - pattern-not: |
+          @app.$METHOD("$PATH")
+          @$LIMIT_DECORATOR
+          async def $FUNC(...):
+            ...
+      - pattern-not: |
+          @app.$METHOD("$PATH")
+          @limiter.$LIMIT_METHOD(...)
+          async def $FUNC(...):
+            ...
+    message: "Consider adding rate limiting to public endpoints."
+    languages: [python]
+    severity: INFO
+    metadata:
+      category: "best-practice"
+      confidence: LOW
+      cwe: ["CWE-770"]
+      owasp: "A8:2017"
+
+  - id: "fastapi-input-validation-simple"
+    patterns:
+      - pattern: |
+          async def $FUNC($PARAM: str = ...):
+            ...
+      - pattern-not: |
+          async def $FUNC($PARAM: str = Field(..., $CONSTRAINTS)):
+            ...
+      - pattern-not: |
+          async def $FUNC($PARAM: $MODEL):
+            ...
+    message: "Consider adding input validation with Pydantic constraints."
+    languages: [python]
+    severity: INFO
+    metadata:
+      category: "best-practice"
+      confidence: LOW
+      cwe: ["CWE-20"]
+      owasp: "A1:2017"
+
+  - id: "fastapi-unsafe-file-upload"
+    pattern: |
+      UploadFile(...)
+    message: "File uploads should be validated for type, size, and content."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: "security"
+      confidence: MEDIUM
+      cwe: ["CWE-434"]
+      owasp: "A1:2017"
+
+  - id: "python-assert-in-production"
+    pattern: |
+      assert $CONDITION
+    message: "Assert statements are removed in optimized Python. Use proper error handling."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: "reliability"
+      confidence: HIGH
+      cwe: ["CWE-703"]
+
+  - id: "python-print-statement"
+    pattern: |
+      print(...)
+    message: "Consider using logging module instead of print for production code."
+    languages: [python]
+    severity: INFO
+    metadata:
+      category: "best-practice"
+      confidence: MEDIUM
+
+  - id: "python-no-bare-except"
+    pattern: |
+      except:
+        ...
+    message: "Bare except clause catches all exceptions. Specify exception types."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: "reliability"
+      confidence: HIGH
+      cwe: ["CWE-396", "CWE-397"]
+
+  - id: "fastapi-missing-https-redirect"
+    pattern: |
+      @app.$METHOD("$PATH")
+      async def $FUNC(...):
+        ...
+    message: "Consider forcing HTTPS redirects in production."
+    languages: [python]
+    severity: INFO
+    metadata:
+      category: "security"
+      confidence: LOW
+      cwe: ["CWE-319"]
+      owasp: "A3:2017"
+
+  - id: "fastapi-exposed-error-details"
+    pattern: |
+      raise HTTPException(status_code=..., detail=$DETAIL)
+    message: "Avoid exposing internal error details to users."
+    languages: [python]
+    severity: WARNING
+    metadata:
+      category: "security"
+      confidence: MEDIUM
+      cwe: ["CWE-209"]
+      owasp: "A6:2017"
