@@ -1,7 +1,11 @@
 rules:
   - id: "fastapi-no-hardcoded-secrets"
-    pattern: |
-      $SECRET = "..."
+    patterns:
+      - pattern: |
+          $SECRET = "..."
+      - metavariable-regex:
+          metavariable: "$SECRET"
+          regex: "(?i)(api[_-]?key|secret|token|password|credential|private[_-]?key|jwt|auth|bearer|access[_-]?token|refresh[_-]?token|client[_-]?(id|secret))"
     message: "Hardcoded secret detected. Use environment variables or secret management."
     languages: [python]
     severity: ERROR
@@ -57,10 +61,21 @@ rules:
       owasp: "A7:2017"
 
   - id: "fastapi-missing-rate-limit"
-    pattern: |
-      @app.$METHOD("$PATH")
-      async def $FUNC(...):
-        ...
+    patterns:
+      - pattern: |
+          @app.$METHOD("$PATH")
+          async def $FUNC(...):
+            ...
+      - pattern-not: |
+          @app.$METHOD("$PATH")
+          @$LIMIT_DECORATOR
+          async def $FUNC(...):
+            ...
+      - pattern-not: |
+          @app.$METHOD("$PATH")
+          @limiter.$LIMIT_METHOD(...)
+          async def $FUNC(...):
+            ...
     message: "Consider adding rate limiting to public endpoints."
     languages: [python]
     severity: INFO
