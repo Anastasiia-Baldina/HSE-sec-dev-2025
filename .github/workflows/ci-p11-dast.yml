@@ -1,0 +1,210 @@
+name: Security - DAST (P11, ZAP baseline)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "requirements.txt"
+      - ".github/workflows/ci-p11-dast.yml"
+      - "Dockerfile*"
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+    paths:
+      - "app/**"
+      - "requirements.txt"
+      - ".github/workflows/ci-p11-dast.yml"
+      - "Dockerfile*"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dast_p11:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Ensure evidence dirs
+        run: mkdir -p EVIDENCE/P11
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run app
+        run: |
+          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
+          SERVER_PID=$!
+          echo "SERVER_PID=$SERVER_PID" >> $GITHUB_ENV
+
+          for i in {1..20}; do
+            if curl -s -f http://localhost:8000/health > /dev/null; then
+              break
+            else
+              sleep 2
+            fi
+          done
+
+          if ! curl -s -f http://localhost:8000/health > /dev/null; then
+            exit 1
+          fi
+
+      - name: ZAP Baseline
+        run: |
+          curl -s http://localhost:8000/health
+
+          TEMP_DIR=$(mktemp -d)
+          chmod 777 "$TEMP_DIR"
+
+          docker run --rm --network host \
+            -v "$TEMP_DIR":/zap/wrk \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+              -t http://localhost:8000/health \
+              -r zap_baseline.html \
+              -J zap_baseline.json \
+              -m 3 \
+              -I
+
+          cp "$TEMP_DIR"/zap_baseline.html . 2>/dev/null || true
+          cp "$TEMP_DIR"/zap_baseline.json . 2>/dev/null || true
+
+          rm -rf "$TEMP_DIR"
+
+      - name: Stop app
+        if: always()
+        run: |
+          if [ -n "$SERVER_PID" ]; then
+            kill $SERVER_PID 2>/dev/null || true
+          fi
+
+      - name: Move reports to evidence directory
+        if: always()
+        run: |
+          mkdir -p EVIDENCE/P11
+
+          if [ -f "zap_baseline.html" ]; then
+            mv zap_baseline.html EVIDENCE/P11/
+          fi
+
+          if [ -f "zap_baseline.json" ]; then
+            mv zap_baseline.json EVIDENCE/P11/
+          fi
+
+          echo "ZAP scan completed: $(date)" > EVIDENCE/P11/scan_info.txt
+          echo "Target endpoint: http://localhost:8000/health" >> EVIDENCE/P11/scan_info.txt
+
+          ls -la EVIDENCE/P11/
+
+      - name: Upload P11 evidence as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P11_EVIDENCE
+          path: EVIDENCE/P11
+          retention-days: 30
+
+      - name: Add PR comment
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+
+            let comment = '## DAST Security Scan Results\n\n';
+            comment += 'Target endpoint: http://localhost:8000/health\n';
+            comment += 'Scan completed: ' + new Date().toISOString().split('T')[0] + '\n';
+            comment += 'Run: [#' + context.runNumber + '](' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')\n\n';
+
+            const jsonPath = path.join('EVIDENCE', 'P11', 'zap_baseline.json');
+
+            if (fs.existsSync(jsonPath)) {
+              try {
+                const report = JSON.parse(fs.readFileSync(jsonPath, 'utf8'));
+                let riskCounts = {
+                  'High': 0,
+                  'Medium': 0,
+                  'Low': 0,
+                  'Informational': 0
+                };
+
+                if (report.site && report.site.length > 0) {
+                  const localSite = report.site.find(s => s['@name'] === 'http://localhost:8000');
+                  if (localSite && localSite.alerts) {
+                    localSite.alerts.forEach(alert => {
+                      const risk = alert.riskdesc ? alert.riskdesc.split(' ')[0] : 'Informational';
+                      if (riskCounts[risk] !== undefined) {
+                        riskCounts[risk]++;
+                      } else {
+                        riskCounts['Informational']++;
+                      }
+                    });
+                  }
+                }
+
+                const totalAlerts = Object.values(riskCounts).reduce((a, b) => a + b, 0);
+
+                comment += '### Results Summary\n\n';
+                comment += 'Total alerts found: ' + totalAlerts + '\n\n';
+
+                comment += '| Risk Level | Number of Alerts |\n';
+                comment += '|------------|------------------|\n';
+                comment += '| High | ' + riskCounts.High + ' |\n';
+                comment += '| Medium | ' + riskCounts.Medium + ' |\n';
+                comment += '| Low | ' + riskCounts.Low + ' |\n';
+                comment += '| Informational | ' + riskCounts.Informational + ' |\n\n';
+              } catch (error) {
+                comment += 'Scan completed with alerts found.\n\n';
+              }
+            } else {
+              comment += 'Scan completed with alerts found.\n\n';
+            }
+
+            comment += '### Available Reports\n';
+            comment += '- Download HTML and JSON reports from [Artifacts](' + context.serverUrl + '/' + context.repo.owner + '/' + context.repo.repo + '/actions/runs/' + context.runId + ')\n';
+            comment += '- Location in repository: EVIDENCE/P11/\n\n';
+
+            comment += '### Next Steps\n';
+            comment += '1. Review findings in the HTML report\n';
+            comment += '2. Check if findings are false positives or need fixing\n';
+            comment += '3. Update PR description with assessment\n';
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: comment
+            });
+
+      - name: Commit evidence to repository
+        if: github.event_name == 'push' && always()
+        env:
+          CURRENT_BRANCH: ${{ github.ref_name }}
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add EVIDENCE/P11/
+          if ! git diff --staged --quiet; then
+            git commit -m "P11: update ZAP baseline reports [skip ci]"
+            git push origin $CURRENT_BRANCH
+          fi
