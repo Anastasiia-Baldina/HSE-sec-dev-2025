@@ -4,6 +4,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.csv_validation import check_and_save
 from app.entity import Topic, TopicStatus
@@ -15,19 +16,37 @@ from app.error_handling import (
     validation_exception_handler,
 )
 
+
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response = await call_next(request)
+
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["Cross-Origin-Resource-Policy"] = "same-origin"
+        path = request.url.path
+
+        if path == "/health":
+            response.headers["Cache-Control"] = "public, max-age=30"
+        else:
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+            response.headers["Pragma"] = "no-cache"
+
+        return response
+
+
 app = FastAPI(title="SecDev Course App", version="0.1.0")
+
+app.add_middleware(SecurityHeadersMiddleware)
 
 limiter = Limiter(key_func=get_remote_address)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 
-
 app.add_exception_handler(ApiError, api_error_handler)
 app.add_exception_handler(HTTPException, http_exception_handler)
 app.add_exception_handler(RequestValidationError, validation_exception_handler)
 app.add_exception_handler(Exception, generic_exception_handler)
-
 
 crud_limit = limiter.shared_limit("15/second", scope="crud-limit")
 read_limit = limiter.shared_limit("25/second", scope="read-limit")
