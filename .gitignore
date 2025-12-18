@@ -14,3 +14,9 @@ build/
 .idea/
 # OS
 .DS_Store
+# ZAP
+.zap_session
+.zap_tmp/
+*.session
+*.session.*
+zap_baseline.*
