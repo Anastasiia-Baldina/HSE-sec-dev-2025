@@ -18,14 +18,11 @@ on:
       - "compose.yaml"
       - "security/**"
       - ".github/workflows/ci-p12-iac-container.yml"
-#checkov test
-permissions: write-all
-#end checkov test
 
-#permissions:
-#  contents: read
-#  pull-requests: write
-#  issues: write
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

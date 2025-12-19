@@ -3,12 +3,6 @@ FROM python:3.11-slim AS build
 
 WORKDIR /app
 
-#hadolint test
-RUN pip install requests
-
-RUN apt-get update && apt-get install -y curl
-#end of hadolint test
-
 COPY requirements.txt requirements-dev.txt ./
 
 RUN pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
