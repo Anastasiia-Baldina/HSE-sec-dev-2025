@@ -3,6 +3,10 @@ name: Block direct push to main
 on:
   push:
     branches: [ main ]
+
+permissions:
+  contents: read
+
 jobs:
   block-direct-push:
     runs-on: ubuntu-latest
