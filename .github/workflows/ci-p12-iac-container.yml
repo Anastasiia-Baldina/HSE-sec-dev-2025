@@ -1,0 +1,267 @@
+name: Security - IaC & Container (P12)
+
+on:
+  workflow_dispatch:
+
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - "Dockerfile"
+      - "compose.yaml"
+      - "security/**"
+      - ".github/workflows/ci-p12-iac-container.yml"
+
+  push:
+    branches: [main]
+    paths:
+      - "Dockerfile"
+      - "compose.yaml"
+      - "security/**"
+      - ".github/workflows/ci-p12-iac-container.yml"
+#checkov test
+permissions: write-all
+#end checkov test
+
+#permissions:
+#  contents: read
+#  pull-requests: write
+#  issues: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  p12-security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Ensure evidence dirs
+        run: mkdir -p EVIDENCE/P12
+
+      - name: Build image
+        run: |
+          docker build -t app:local .
+
+      - name: Hadolint Dockerfile
+        run: |
+          set -euo pipefail
+          echo "Running Hadolint Dockerfile scan..."
+          mkdir -p EVIDENCE/P12
+
+          REPORT="EVIDENCE/P12/hadolint_report.json"
+          STDERR_LOG="EVIDENCE/P12/hadolint_stderr.log"
+          TMP="$(mktemp)"
+
+          if docker run --rm -v "$PWD:/work" hadolint/hadolint             hadolint -f json /work/Dockerfile > "$TMP" 2> "$STDERR_LOG"; then
+            :
+          else
+            echo "Hadolint finished with non-zero exit code (see $STDERR_LOG)"
+          fi
+
+          # Guarantee non-empty valid JSON
+          if [ ! -s "$TMP" ]; then
+            echo "[]" > "$REPORT"
+          else
+            cat "$TMP" > "$REPORT"
+          fi
+
+          rm -f "$TMP"
+          echo "Hadolint scan completed."
+
+      - name: Checkov scan
+        run: |
+          set -euo pipefail
+          echo "Running Checkov scan..."
+          mkdir -p EVIDENCE/P12
+
+          REPORT="EVIDENCE/P12/checkov_report.json"
+          STDERR_LOG="EVIDENCE/P12/checkov_stderr.log"
+          TMP="$(mktemp)"
+
+          # Checkov may return non-zero if it finds policy violations
+          # Force scanning GitHub Actions (and Dockerfile too) so rules like CKV2_GHA_1 are evaluated.
+          if docker run --rm -v "$PWD:/work" bridgecrew/checkov:latest \
+            --directory /work \
+            --framework github_actions,dockerfile \
+            --output json > "$TMP" 2> "$STDERR_LOG"; then
+            :
+          else
+            echo "Checkov finished with non-zero exit code (see $STDERR_LOG)"
+          fi
+
+          # Guarantee non-empty valid JSON with expected structure
+          if [ ! -s "$TMP" ]; then
+            echo '{"results":{"failed_checks":[],"passed_checks":[]}}' > "$REPORT"
+          else
+            cat "$TMP" > "$REPORT"
+          fi
+
+          rm -f "$TMP"
+          echo "Checkov scan completed."
+
+      - name: Trivy image scan
+        run: |
+          set -euo pipefail
+          echo "Running Trivy image scan..."
+          mkdir -p EVIDENCE/P12
+
+          REPORT="EVIDENCE/P12/trivy_report.json"
+          STDERR_LOG="EVIDENCE/P12/trivy_stderr.log"
+          TMP="$(mktemp)"
+
+          # Trivy may return non-zero depending on flags; we still want the JSON
+          if docker run --rm             -v /var/run/docker.sock:/var/run/docker.sock             -v "$PWD:/work"             aquasec/trivy:latest             image app:local             --format json > "$TMP" 2> "$STDERR_LOG"; then
+            :
+          else
+            echo "Trivy finished with non-zero exit code (see $STDERR_LOG)"
+          fi
+
+          # Guarantee non-empty valid JSON
+          if [ ! -s "$TMP" ]; then
+            echo "{}" > "$REPORT"
+          else
+            cat "$TMP" > "$REPORT"
+          fi
+
+          rm -f "$TMP"
+          echo "Trivy scan completed."
+
+      - name: Comment PR with security summary
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require("fs");
+
+            function loadJson(path, fallback) {
+              try {
+                if (!fs.existsSync(path)) return fallback;
+                const t = fs.readFileSync(path, "utf8").trim();
+                if (!t) return fallback;
+                return JSON.parse(t);
+              } catch {
+                return fallback;
+              }
+            }
+
+            function inc(map, key) {
+              const k = String(key || "UNKNOWN").toUpperCase();
+              map[k] = (map[k] || 0) + 1;
+            }
+
+            function topLines(map) {
+              const entries = Object.entries(map).sort((a, b) => b[1] - a[1]);
+              if (entries.length === 0) return "none";
+              return entries.map(([k, v]) => `${k}: ${v}`).join("\n");
+            }
+
+            // -------- Hadolint --------
+            const hadolint = loadJson("EVIDENCE/P12/hadolint_report.json", []);
+            const hadolintArr = Array.isArray(hadolint) ? hadolint : [];
+            const hadolintRules = {};
+            for (const f of hadolintArr) inc(hadolintRules, f.code);
+
+            // -------- Checkov --------
+            const checkovRaw = loadJson("EVIDENCE/P12/checkov_report.json", {});
+            const checkovArr = Array.isArray(checkovRaw) ? checkovRaw : [checkovRaw];
+
+            let failedChecks = [];
+            for (const obj of checkovArr) {
+              const fc = obj?.results?.failed_checks;
+              if (Array.isArray(fc)) failedChecks.push(...fc);
+            }
+
+            const checkovIds = {};
+            for (const c of failedChecks) inc(checkovIds, c.check_id);
+
+            const checkovExamples = failedChecks.slice(0, 10).map(c => {
+              const id = c.check_id || "UNKNOWN";
+              const name = c.check_name || "";
+              const file = c.file_path || c.repo_file_path || "unknown";
+              const keys = Array.isArray(c?.check_result?.evaluated_keys)
+                ? c.check_result.evaluated_keys.join(", ")
+                : "n/a";
+              return `${id} | ${file} | keys: ${keys}${name ? ` | ${name}` : ""}`;
+            });
+
+            // -------- Trivy --------
+            const trivy = loadJson("EVIDENCE/P12/trivy_report.json", {});
+            const results = Array.isArray(trivy.Results) ? trivy.Results : [];
+
+            const vulns = [];
+            const misconfsFail = [];
+
+            for (const r of results) {
+              if (Array.isArray(r.Vulnerabilities)) vulns.push(...r.Vulnerabilities);
+              if (Array.isArray(r.Misconfigurations)) {
+                misconfsFail.push(...r.Misconfigurations.filter(m => String(m.Status).toUpperCase() === "FAIL"));
+              }
+            }
+
+            const trivySev = {};
+            for (const v of vulns) inc(trivySev, v.Severity);
+            for (const m of misconfsFail) inc(trivySev, m.Severity);
+
+            const body = [
+              "<!-- P12_SECURITY_SUMMARY -->",
+              "Security scanning summary (P12)",
+              "",
+              `Hadolint: ${hadolintArr.length} finding(s)`,
+              `Checkov: ${failedChecks.length} failed check(s)`,
+              `Trivy: ${vulns.length} vulnerability finding(s), ${misconfsFail.length} misconfiguration finding(s)`,
+              "",
+              "Hadolint top rules:",
+              topLines(hadolintRules),
+              "",
+              "Checkov top checks:",
+              topLines(checkovIds),
+              "",
+              "Checkov examples:",
+              (checkovExamples.length ? checkovExamples.join("\n") : "none"),
+              "",
+              "Trivy top severities:",
+              topLines(trivySev),
+            ].join("\n");
+
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+
+            const comments = await github.rest.issues.listComments({ owner, repo, issue_number });
+            const existing = comments.data.find(c => c.body && c.body.includes("<!-- P12_SECURITY_SUMMARY -->"));
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo,
+                comment_id: existing.id,
+                body
+              });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+            }
+
+      - name: Debug information
+        if: always()
+        run: |
+          echo "Evidence directory"
+          ls -la EVIDENCE/P12/
+          echo ""
+          echo "Hadolint report (first 200 lines):"
+          sed -n '1,200p' EVIDENCE/P12/hadolint_report.json || true
+          echo ""
+          echo "Checkov report (first 200 lines):"
+          sed -n '1,200p' EVIDENCE/P12/checkov_report.json || true
+          echo ""
+          echo "Trivy report (first 200 lines):"
+          sed -n '1,200p' EVIDENCE/P12/trivy_report.json || true
+
+      - name: Upload P12 evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: P12_EVIDENCE
+          path: EVIDENCE/P12
