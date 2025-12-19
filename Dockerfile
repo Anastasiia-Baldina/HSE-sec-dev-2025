@@ -1,33 +1,30 @@
-# Build stage (install dev deps + run tests)
+# Build stage
 FROM python:3.11-slim AS build
 
 WORKDIR /app
 
-COPY requirements.txt requirements-dev.txt ./
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
 
-# Dev dependencies are needed only for tests in the build stage
-RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir -r requirements.txt -r requirements-dev.txt
+COPY requirements.txt requirements-dev.txt ./
+RUN python -m pip install -r requirements.txt -r requirements-dev.txt
 
 COPY . .
-
 RUN pytest -q
 
-
-# Runtime stage (production deps only)
-FROM python:3.11-slim AS runtime
+# Runtime stage
+FROM python:3.11-slim
 
 WORKDIR /app
 
-# Non-root user
-RUN useradd --create-home --uid 10001 appuser
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# Install only production dependencies to avoid shipping dev/test packages
-COPY requirements.txt ./
-RUN pip install --no-cache-dir --upgrade pip \
- && pip install --no-cache-dir -r requirements.txt
+RUN useradd --create-home --shell /usr/sbin/nologin appuser
 
-# Copy application source
+COPY --from=build /usr/local /usr/local
 COPY --chown=appuser:appuser . .
 
 USER appuser
